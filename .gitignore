@@ -1,0 +1,13 @@
+venv
+.env
+__pycache__/
+*.pyc
+*.pyo
+logs/
+Artifacts/
+prediction_output/
+.vscode/
+.idea/
+*.pkl
+*.npy
+saved_models/
