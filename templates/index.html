@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Phishing Website Detection</title>
+
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="card">
+
+            <h1>🛡️ Phishing Website Detection System</h1>
+
+            <p class="subtitle">
+                Machine Learning Powered Website Threat Detection
+            </p>
+
+            <p class="description">
+                Check a single website by URL, or upload a CSV dataset of
+                website features to detect phishing and legitimate websites in bulk.
+            </p>
+
+            <div class="tabs">
+                <button type="button" class="tab-btn active" data-tab="url-panel">🔗 Check a URL</button>
+                <button type="button" class="tab-btn" data-tab="csv-panel">📄 Upload CSV</button>
+            </div>
+
+            <div id="url-panel" class="panel active">
+                <form action="/predict-url" method="post">
+
+                    <input
+                        type="text"
+                        name="url"
+                        id="url"
+                        class="url-input"
+                        placeholder="e.g. example.com or https://example.com"
+                        required>
+
+                    <button type="submit">
+                        🚀 Check URL
+                    </button>
+                    <div id="url-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Fetching and analyzing the website... Please wait.</p>
+                    </div>
+
+                </form>
+                <p class="hint">
+                    We fetch the site live and check its SSL certificate, domain age,
+                    forms, links, and scripts for phishing indicators.
+                </p>
+            </div>
+
+            <div id="csv-panel" class="panel">
+                <form action="/predict"
+                      method="post"
+                      enctype="multipart/form-data">
+
+                   <label for="file" class="upload-box">
+                      📁 Click here to choose a CSV file
+                    </label>
+
+                   <input
+                       type="file"
+                       name="file"
+                       id="file"
+                       accept=".csv"
+                       required
+                       hidden>
+
+                  <p id="file-name">No file selected</p>
+
+                   <button type="submit">
+                     🚀 Predict
+                   </button>
+                   <div id="loading" class="loading">
+                   <div class="spinner"></div>
+                   <p>Analyzing websites... Please wait.</p>
+                   </div>
+
+                </form>
+            </div>
+
+        </div>
+
+        <footer>
+
+            <span>FastAPI</span>
+
+            <span>Scikit-Learn</span>
+
+            <span>Docker</span>
+
+            <span>AWS EC2</span>
+
+            <span>GitHub Actions</span>
+
+        </footer>
+
+    </div>
+
+    <script src="/static/js/script.js"></script>
+
+</body>
+
+</html>

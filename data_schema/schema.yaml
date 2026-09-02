@@ -23,12 +23,7 @@ columns:
   - popUpWidnow: int64
   - Iframe: int64
   - age_of_domain: int64
-  - DNSRecord: int64 
-  - web_traffic: int64
-  - Page_Rank: int64
-  - Google_Index: int64
-  - Links_pointing_to_page: int64
-  - Statistical_report: int64
+  - DNSRecord: int64
   - Result: int64
 
 
@@ -57,10 +52,5 @@ numerical_columns:
   - popUpWidnow
   - Iframe
   - age_of_domain
-  - DNSRecord 
-  - web_traffic
-  - Page_Rank
-  - Google_Index
-  - Links_pointing_to_page
-  - Statistical_report
+  - DNSRecord
   - Result

@@ -1,10 +1,19 @@
+import os
 
-from pymongo.mongo_client import MongoClient
+import certifi
 
-uri = "mongodb+srv://kevinjesu11_db_user:<db_password>@cluster0.iyklfll.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+uri = os.getenv("MONGO_DB_URL") or os.getenv("MONGODB_URL_KEY")
+
+if not uri:
+    raise SystemExit("Set MONGO_DB_URL or MONGODB_URL_KEY before testing MongoDB.")
+
+try:
+    from pymongo.mongo_client import MongoClient
+except ImportError:
+    raise SystemExit("Install dependencies with `python -m pip install -r requirements.txt` before testing MongoDB.")
 
 # Create a new client and connect to the server
-client = MongoClient(uri)
+client = MongoClient(uri, tlsCAFile=certifi.where())
 
 # Send a ping to confirm a successful connection
 try:

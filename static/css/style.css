@@ -1,0 +1,266 @@
+/* Reset */
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial, Helvetica, sans-serif;
+}
+
+/* Background */
+body{
+    background:#f4f7fb;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+    color:#1f2937;
+}
+
+/* Main Container */
+.container{
+    width:100%;
+    max-width:700px;
+    padding:20px;
+}
+
+/* Card */
+.card{
+    background:white;
+    border-radius:15px;
+    padding:40px;
+    text-align:center;
+    box-shadow:0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* Heading */
+.card h1{
+    color:#1E3A8A;
+    margin-bottom:15px;
+}
+
+/* Subtitle */
+.subtitle{
+    color:#2563EB;
+    font-size:18px;
+    margin-bottom:15px;
+}
+
+/* Description */
+.description{
+    color:#6B7280;
+    margin-bottom:30px;
+    line-height:1.6;
+}
+
+/* Tabs */
+.tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:20px;
+    background:#F1F5F9;
+    padding:6px;
+    border-radius:10px;
+}
+
+.tab-btn{
+    flex:1;
+    padding:10px;
+    border:none;
+    border-radius:8px;
+    background:transparent;
+    color:#6B7280;
+    font-size:15px;
+    font-weight:bold;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.tab-btn:hover{
+    color:#1E3A8A;
+}
+
+.tab-btn.active{
+    background:white;
+    color:#2563EB;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+.panel{
+    display:none;
+    text-align:left;
+}
+
+.panel.active{
+    display:block;
+}
+
+/* URL input */
+.url-input{
+    width:100%;
+    padding:16px;
+    border:2px solid #E5E7EB;
+    border-radius:10px;
+    margin-bottom:18px;
+    font-size:15px;
+    color:#1f2937;
+}
+
+.url-input:focus{
+    outline:none;
+    border-color:#2563EB;
+}
+
+.hint{
+    margin-top:15px;
+    color:#9CA3AF;
+    font-size:13px;
+    text-align:center;
+    line-height:1.5;
+}
+
+/* File Upload */
+input[type=file]{
+    width:100%;
+    padding:12px;
+    border:2px dashed #2563EB;
+    border-radius:10px;
+    margin-bottom:25px;
+    cursor:pointer;
+    background:#F8FAFC;
+}
+
+/* Button */
+button{
+    width:100%;
+    padding:15px;
+    background:#2563EB;
+    color:white;
+    border:none;
+    border-radius:10px;
+    font-size:17px;
+    cursor:pointer;
+    transition:.3s;
+}
+
+/* Button Hover */
+button:hover{
+    background:#1D4ED8;
+}
+
+/* Footer */
+footer{
+    margin-top:25px;
+    display:flex;
+    justify-content:center;
+    gap:20px;
+    flex-wrap:wrap;
+    color:#6B7280;
+    font-size:14px;
+}
+/* Custom Upload Box */
+.upload-box{
+    display:block;
+    width:100%;
+    padding:18px;
+    border:2px dashed #2563EB;
+    border-radius:10px;
+    background:#F8FAFC;
+    cursor:pointer;
+    color:#2563EB;
+    font-weight:bold;
+    transition:.3s;
+}
+
+.upload-box:hover{
+    background:#EFF6FF;
+}
+
+#file-name{
+    margin:15px 0 25px;
+    color:#6B7280;
+    font-size:15px;
+}
+/* Loading Animation */
+.loading{
+    display:none;
+    margin-top:25px;
+}
+
+.spinner{
+    width:55px;
+    height:55px;
+    border:6px solid #E5E7EB;
+    border-top:6px solid #2563EB;
+    border-radius:50%;
+    margin:auto;
+    animation:spin 1s linear infinite;
+}
+
+.loading p{
+    margin-top:15px;
+    color:#2563EB;
+    font-weight:bold;
+}
+
+@keyframes spin{
+    from{
+        transform:rotate(0deg);
+    }
+    to{
+        transform:rotate(360deg);
+    }
+}
+
+/* Result page */
+.checked-url{
+    color:#6B7280;
+    word-break:break-all;
+    margin-bottom:20px;
+}
+
+.verdict-badge{
+    display:inline-block;
+    padding:14px 28px;
+    border-radius:10px;
+    font-size:20px;
+    font-weight:bold;
+    margin-bottom:15px;
+}
+
+.verdict-badge.safe{
+    background:#DCFCE7;
+    color:#166534;
+}
+
+.verdict-badge.danger{
+    background:#FEE2E2;
+    color:#991B1B;
+}
+
+.confidence{
+    color:#374151;
+    font-weight:bold;
+    margin-bottom:15px;
+}
+
+.warning-note{
+    background:#FEF3C7;
+    color:#92400E;
+    padding:12px;
+    border-radius:8px;
+    font-size:14px;
+    margin-bottom:15px;
+    text-align:left;
+}
+
+.back-link{
+    display:inline-block;
+    margin-top:20px;
+    color:#2563EB;
+    font-weight:bold;
+    text-decoration:none;
+}
+
+.back-link:hover{
+    text-decoration:underline;
+}

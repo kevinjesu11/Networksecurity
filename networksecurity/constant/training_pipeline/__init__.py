@@ -10,6 +10,19 @@ TARGET_COLUMN = "Result"
 PIPELINE_NAME: str = "NetworkSecurity"
 ARTIFACT_DIR: str = "Artifacts"
 FILE_NAME: str = "phisingData.csv"
+LOCAL_DATA_FILE_PATH: str = os.path.join("Network_Data", FILE_NAME)
+
+# Original dataset columns with no free/live data source anymore (Alexa traffic
+# rank, Google PageRank API, Google index/backlink counts, phishing blacklist
+# reports). Dropped at ingestion so the model only ever learns from features that
+# can actually be computed live for a single URL at prediction time.
+LEGACY_FEATURE_COLUMNS_TO_DROP = [
+    "web_traffic",
+    "Page_Rank",
+    "Google_Index",
+    "Links_pointing_to_page",
+    "Statistical_report",
+]
 
 TRAIN_FILE_NAME: str = "train.csv"
 TEST_FILE_NAME: str = "test.csv"
@@ -70,4 +83,4 @@ MODEL_TRAINER_TRAINED_MODEL_NAME: str = "model.pkl"
 MODEL_TRAINER_EXPECTED_SCORE: float = 0.6
 MODEL_TRAINER_OVER_FIITING_UNDER_FITTING_THRESHOLD: float = 0.05
 
-TRAINING_BUCKET_NAME = "kevin2001-training-artifacts"
+TRAINING_BUCKET_NAME = os.getenv("TRAINING_BUCKET_NAME", "")

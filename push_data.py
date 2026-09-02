@@ -5,17 +5,15 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
-MONGO_DB_URL=os.getenv("MONGO_DB_URL")
-print(MONGO_DB_URL)
-
 import certifi
 ca=certifi.where()
 
 import pandas as pd
 import numpy as np
-import pymongo
 from networksecurity.exception.exception import NetworkSecurityException
 from networksecurity.logging.logger import logging
+
+MONGO_DB_URL=os.getenv("MONGO_DB_URL") or os.getenv("MONGODB_URL_KEY")
 
 class NetworkDataExtract():
     def __init__(self):
@@ -39,7 +37,12 @@ class NetworkDataExtract():
             self.collection=collection
             self.records=records
 
-            self.mongo_client=pymongo.MongoClient(MONGO_DB_URL)
+            if not MONGO_DB_URL:
+                raise ValueError("Set MONGO_DB_URL or MONGODB_URL_KEY before pushing data to MongoDB.")
+
+            import pymongo
+
+            self.mongo_client=pymongo.MongoClient(MONGO_DB_URL, tlsCAFile=ca)
             self.database = self.mongo_client[self.database]
             
             self.collection=self.database[self.collection]
@@ -49,12 +52,11 @@ class NetworkDataExtract():
             raise NetworkSecurityException(e,sys)
         
 if __name__=='__main__':
-    FILE_PATH="Network_Data\phisingData.csv"
+    FILE_PATH=os.path.join("Network_Data", "phisingData.csv")
     DATABASE="NetworkSecurityDB"
     Collection="NetworkData"
     networkobj=NetworkDataExtract()
     records=networkobj.csv_to_json_convertor(file_path=FILE_PATH)
-    print(records)
     no_of_records=networkobj.insert_data_mongodb(records,DATABASE,Collection)
     print(no_of_records)
         

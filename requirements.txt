@@ -1,7 +1,6 @@
 python-dotenv
 pandas
 numpy
-pymongo
 certifi
 pymongo[srv]
 scikit-learn
@@ -11,6 +10,10 @@ dagshub
 fastapi
 uvicorn
 python-multipart
+jinja2
+requests
+beautifulsoup4
+python-whois
 
 
 ##-e .

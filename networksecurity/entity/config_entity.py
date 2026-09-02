@@ -1,13 +1,12 @@
 from datetime import datetime
 import os
+from typing import Optional
 from networksecurity.constant import training_pipeline
-
-print(training_pipeline.PIPELINE_NAME)
-print(training_pipeline.ARTIFACT_DIR)
 
 
 class TrainingPipelineConfig:
-    def __init__(self,timestamp=datetime.now()):
+    def __init__(self,timestamp: Optional[datetime] = None):
+        timestamp = timestamp or datetime.now()
         timestamp=timestamp.strftime("%m_%d_%Y_%H_%M_%S")
         self.pipeline_name=training_pipeline.PIPELINE_NAME
         self.artifact_name=training_pipeline.ARTIFACT_DIR

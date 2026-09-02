@@ -22,7 +22,7 @@ def get_requirements()->List[str]:
             for line in lines:
                 requirement=line.strip()
                 ## ignore empty lines and -e .
-                if requirement and requirement!= '-e .':
+                if requirement and not requirement.startswith("#") and requirement!= '-e .':
                     requirement_lst.append(requirement)
     except FileNotFoundError:
         print("requirements.txt file not found")

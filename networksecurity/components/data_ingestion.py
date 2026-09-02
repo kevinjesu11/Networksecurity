@@ -10,13 +10,13 @@ import os
 import sys
 import numpy as np
 import pandas as pd
-import pymongo
 from typing import List
 from sklearn.model_selection import train_test_split
 from dotenv import load_dotenv
+from networksecurity.constant.training_pipeline import LOCAL_DATA_FILE_PATH, LEGACY_FEATURE_COLUMNS_TO_DROP
 load_dotenv()
 
-MONGO_DB_URL=os.getenv("MONGO_DB_URL")
+MONGO_DB_URL=os.getenv("MONGO_DB_URL") or os.getenv("MONGODB_URL_KEY")
 
 
 class DataIngestion:
@@ -28,9 +28,25 @@ class DataIngestion:
         
     def export_collection_as_dataframe(self):
         """
-        Read data from mongodb
+        Read data from MongoDB when configured, otherwise use the bundled CSV.
         """
         try:
+            if not MONGO_DB_URL:
+                logging.info(
+                    f"MongoDB URL not configured. Reading local file: {LOCAL_DATA_FILE_PATH}"
+                )
+                if not os.path.exists(LOCAL_DATA_FILE_PATH):
+                    raise FileNotFoundError(f"Local data file not found: {LOCAL_DATA_FILE_PATH}")
+                df = pd.read_csv(LOCAL_DATA_FILE_PATH)
+                return df.drop(columns=LEGACY_FEATURE_COLUMNS_TO_DROP, errors="ignore")
+
+            try:
+                import pymongo
+            except ImportError as import_error:
+                raise ImportError(
+                    "pymongo is required when MONGO_DB_URL or MONGODB_URL_KEY is configured"
+                ) from import_error
+
             database_name=self.data_ingestion_config.database_name
             collection_name=self.data_ingestion_config.collection_name
             self.mongo_client=pymongo.MongoClient(MONGO_DB_URL)
@@ -41,9 +57,13 @@ class DataIngestion:
                 df=df.drop(columns=["_id"],axis=1)
             
             df.replace({"na":np.nan},inplace=True)
-            return df
+            if df.empty:
+                raise ValueError(
+                    f"No records found in MongoDB collection {database_name}.{collection_name}"
+                )
+            return df.drop(columns=LEGACY_FEATURE_COLUMNS_TO_DROP, errors="ignore")
         except Exception as e:
-            raise NetworkSecurityException
+            raise NetworkSecurityException(e,sys)
         
     def export_data_into_feature_store(self,dataframe: pd.DataFrame):
         try:
@@ -98,4 +118,4 @@ class DataIngestion:
             return dataingestionartifact
 
         except Exception as e:
-            raise NetworkSecurityException
+            raise NetworkSecurityException(e,sys)

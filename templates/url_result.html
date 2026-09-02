@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Phishing Website Detection - Result</title>
+
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="card">
+
+            <h1>🛡️ Scan Result</h1>
+
+            <p class="checked-url">{{ url }}</p>
+
+            {% if is_phishing %}
+            <div class="verdict-badge danger">⚠️ Likely Phishing</div>
+            {% else %}
+            <div class="verdict-badge safe">✅ Likely Legitimate</div>
+            {% endif %}
+
+            {% if confidence is not none %}
+            <p class="confidence">Model confidence: {{ confidence }}%</p>
+            {% endif %}
+
+            {% if fetch_error %}
+            <p class="warning-note">
+                ⚠️ Could not fetch the page directly ({{ fetch_error }}). Page-content
+                signals were approximated, so this result may be less reliable.
+            </p>
+            {% endif %}
+
+            <a href="/" class="back-link">← Check another site</a>
+
+        </div>
+
+        <footer>
+            <span>FastAPI</span>
+            <span>Scikit-Learn</span>
+            <span>Docker</span>
+            <span>AWS EC2</span>
+            <span>GitHub Actions</span>
+        </footer>
+
+    </div>
+
+</body>
+
+</html>
