@@ -85,11 +85,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y jq unzip
+      # OIDC: GitHub assumes the role and receives short-lived credentials, so
+      # there are no long-lived AWS keys stored as repository secrets. Requires
+      # the `id-token: write` permission declared at the top of this file.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -112,38 +114,94 @@ jobs:
   Continuous-Deployment:
     needs: build-and-push-ecr-image
     if: github.event_name != 'pull_request' && vars.ENABLE_AWS_DEPLOY == 'true'
-    runs-on: self-hosted
+    # A GitHub-hosted runner drives the deploy through SSM rather than a
+    # self-hosted runner on the instance. This repository is public, and a
+    # self-hosted runner attached to a public repository is a standing invitation
+    # to run a fork's code on the box. Nothing needs to listen on EC2 for this.
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      
-      
-      - name: Pull latest images
+      - name: Deploy container on EC2 via SSM
+        env:
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          REGION: ${{ secrets.AWS_REGION }}
+          REGISTRY: ${{ secrets.AWS_ECR_LOGIN_URI }}
+          REPOSITORY: ${{ secrets.ECR_REPOSITORY_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-         docker pull ${{secrets.AWS_ECR_LOGIN_URI}}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
-         
-      - name: Stop and remove container if running
-        run: |
-         docker rm -f networksecurity || true
-       
-      - name: Run Docker Image to serve users
-        run: |
-         docker run -d -p 8080:8080 --restart unless-stopped --name networksecurity -e 'AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}' -e 'AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}' -e 'AWS_REGION=${{ secrets.AWS_REGION }}' -e 'TRAINING_BUCKET_NAME=${{ secrets.TRAINING_BUCKET_NAME }}' -e 'MONGO_DB_URL=${{ secrets.MONGO_DB_URL }}' -e 'MONGODB_URL_KEY=${{ secrets.MONGO_DB_URL }}' -e 'MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}' -e 'MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}' -e 'MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}' -e 'TRAIN_API_KEY=${{ secrets.TRAIN_API_KEY }}' ${{secrets.AWS_ECR_LOGIN_URI}}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
-      - name: Verify deployed container
-        run: |
-         sleep 10
-         curl -f http://localhost:8080/health
-      - name: Clean previous images and containers
-        run: |
-         docker system prune -f
+          set -euo pipefail
+
+          # Values the runner knows. None are secret: the account id in the
+          # registry URI is the most sensitive part, and SSM command history is
+          # readable only with AWS access anyway. Application secrets are
+          # deliberately NOT passed here -- see below.
+          cat > deploy.sh <<EOF
+          REGION="${REGION}"
+          REGISTRY="${REGISTRY}"
+          IMAGE="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
+          EOF
+
+          # Everything below runs on the instance, quoted so the runner leaves
+          # it alone. The instance authenticates with its own IAM role.
+          cat >> deploy.sh <<'EOF'
+          set -euo pipefail
+
+          aws ecr get-login-password --region "$REGION"             | docker login --username AWS --password-stdin "$REGISTRY"
+
+          docker pull "$IMAGE"
+
+          # Application secrets are read here, on the instance, from Parameter
+          # Store. Passing them through the SSM command would write them into
+          # command history in plaintext.
+          get_param() {
+            aws ssm get-parameter --name "$1" --with-decryption               --region "$REGION" --query Parameter.Value --output text 2>/dev/null || true
+          }
+
+          TRAIN_API_KEY="$(get_param /networksecurity/TRAIN_API_KEY)"
+          MONGO_DB_URL="$(get_param /networksecurity/MONGO_DB_URL)"
+
+          docker rm -f networksecurity 2>/dev/null || true
+
+          docker run -d             -p 8080:8080             --restart unless-stopped             --name networksecurity             -e AWS_REGION="$REGION"             -e TRAIN_API_KEY="$TRAIN_API_KEY"             -e MONGO_DB_URL="$MONGO_DB_URL"             -e MONGODB_URL_KEY="$MONGO_DB_URL"             "$IMAGE"
+
+          # Fail the deploy rather than leave a broken container running.
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/health > /dev/null; then
+              echo "health check passed"
+              docker image prune -f
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "health check failed; container logs follow" >&2
+          docker logs --tail 50 networksecurity >&2
+          exit 1
+          EOF
+
+          COMMAND_ID=$(aws ssm send-command             --instance-ids "$INSTANCE_ID"             --document-name AWS-RunShellScript             --comment "Deploy ${IMAGE_TAG:0:7}"             --parameters "$(jq -n --rawfile s deploy.sh '{commands: [$s]}')"             --query Command.CommandId --output text)
+
+          echo "SSM command: $COMMAND_ID"
+
+          # Poll until SSM reaches a terminal state. Pending/InProgress/Delayed
+          # are the non-terminal ones; anything else means the run is over.
+          STATUS=Pending
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation               --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"               --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Pending|InProgress|Delayed) sleep 5 ;;
+              *) break ;;
+            esac
+          done
+
+          echo "SSM status: $STATUS"
+
+          aws ssm get-command-invocation             --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"             --query StandardOutputContent --output text || true
+          aws ssm get-command-invocation             --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"             --query StandardErrorContent --output text >&2 || true
+
+          test "$STATUS" = "Success"
