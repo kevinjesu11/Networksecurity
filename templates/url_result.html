@@ -20,14 +20,32 @@
 
             <p class="checked-url">{{ url }}</p>
 
-            {% if is_phishing %}
+            {% if verdict == "phishing" %}
             <div class="verdict-badge danger">⚠️ Likely Phishing</div>
+            {% elif verdict == "uncertain" %}
+            <div class="verdict-badge caution">🟠 Inconclusive</div>
+            <p class="warning-note">
+                The model is not confident either way on this URL, so treat it as
+                unverified rather than safe. Weak scores are common for sites that
+                could not be fully analysed, or that are too new to have a history.
+            </p>
             {% else %}
             <div class="verdict-badge safe">✅ Likely Legitimate</div>
             {% endif %}
 
             {% if confidence is not none %}
             <p class="confidence">Model confidence: {{ confidence }}%</p>
+            {% endif %}
+
+            {% if critical_flags or warning_flags %}
+            <ul class="flag-list">
+                {% for f in critical_flags %}
+                <li class="flag critical">🛑 {{ f }}</li>
+                {% endfor %}
+                {% for f in warning_flags %}
+                <li class="flag warn">⚠️ {{ f }}</li>
+                {% endfor %}
+            </ul>
             {% endif %}
 
             {% if fetch_error %}

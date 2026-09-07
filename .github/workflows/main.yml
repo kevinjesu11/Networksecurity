@@ -35,11 +35,19 @@ jobs:
           python -m compileall networksecurity app.py main.py push_data.py
           python -c "import app; print('app import ok')"
 
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/ -v
+
       - name: Train model artifact
         run: |
           python -c "from networksecurity.pipeline.training_pipeline import TrainingPipeline; print(TrainingPipeline().run_pipeline())"
           test -f final_model/model.pkl
           test -f final_model/preprocessor.pkl
+
+      - name: Verify trained artifact is loadable under this scikit-learn
+        run: |
+          python -m pytest tests/test_model_integrity.py -v
 
       - name: Upload trained model artifact
         uses: actions/upload-artifact@v7
@@ -119,7 +127,7 @@ jobs:
        
       - name: Run Docker Image to serve users
         run: |
-         docker run -d -p 8080:8080 --restart unless-stopped --name networksecurity -e 'AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}' -e 'AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}' -e 'AWS_REGION=${{ secrets.AWS_REGION }}' -e 'TRAINING_BUCKET_NAME=${{ secrets.TRAINING_BUCKET_NAME }}' -e 'MONGO_DB_URL=${{ secrets.MONGO_DB_URL }}' -e 'MONGODB_URL_KEY=${{ secrets.MONGO_DB_URL }}' -e 'MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}' -e 'MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}' -e 'MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}' ${{secrets.AWS_ECR_LOGIN_URI}}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
+         docker run -d -p 8080:8080 --restart unless-stopped --name networksecurity -e 'AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}' -e 'AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}' -e 'AWS_REGION=${{ secrets.AWS_REGION }}' -e 'TRAINING_BUCKET_NAME=${{ secrets.TRAINING_BUCKET_NAME }}' -e 'MONGO_DB_URL=${{ secrets.MONGO_DB_URL }}' -e 'MONGODB_URL_KEY=${{ secrets.MONGO_DB_URL }}' -e 'MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}' -e 'MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}' -e 'MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}' -e 'TRAIN_API_KEY=${{ secrets.TRAIN_API_KEY }}' ${{secrets.AWS_ECR_LOGIN_URI}}/${{ secrets.ECR_REPOSITORY_NAME }}:latest
       - name: Verify deployed container
         run: |
          sleep 10

@@ -237,6 +237,11 @@ footer{
     color:#991B1B;
 }
 
+.verdict-badge.caution{
+    background:#FEF3C7;
+    color:#92400E;
+}
+
 .confidence{
     color:#374151;
     font-weight:bold;
@@ -263,4 +268,29 @@ footer{
 
 .back-link:hover{
     text-decoration:underline;
+}
+.flag-list{
+    list-style:none;
+    padding:0;
+    margin:0 0 15px 0;
+    text-align:left;
+}
+
+.flag{
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:14px;
+    margin-bottom:8px;
+    line-height:1.45;
+}
+
+.flag.critical{
+    background:#FEE2E2;
+    color:#991B1B;
+    font-weight:600;
+}
+
+.flag.warn{
+    background:#FEF3C7;
+    color:#92400E;
 }

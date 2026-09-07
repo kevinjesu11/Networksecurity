@@ -14,6 +14,11 @@ except ImportError:
     whois = None
 
 from networksecurity.logging.logger import logging
+from networksecurity.utils.safe_fetch import (
+    BlockedURLError,
+    GENERIC_FETCH_ERROR,
+    safe_get,
+)
 
 # Ordered to match data_schema/schema.yaml minus the TARGET_COLUMN ("Result"),
 # which is the column order the trained preprocessor/model expect. The 5 original
@@ -54,7 +59,7 @@ _REQUEST_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; PhishGuardBot/1.0)"}
 _FLIP_POLARITY = {
     "having_IP_Address", "having_Sub_Domain", "Prefix_Suffix", "Request_URL",
     "URL_of_Anchor", "Links_in_tags", "SFH", "Submitting_to_email", "port",
-    "on_mouseover", "RightClick", "age_of_domain", "DNSRecord",
+    "on_mouseover", "RightClick", "age_of_domain", "DNSRecord", "having_At_Symbol",
 }
 
 
@@ -77,16 +82,21 @@ class URLFeatureExtractor:
         self.response = None
         self.soup = None
         self.fetch_error = None
+        self.blocked_reason = None
         try:
-            self.response = requests.get(
-                self.url,
-                timeout=self.timeout,
-                headers=_REQUEST_HEADERS,
-                allow_redirects=True,
-            )
+            # Validates the resolved address before every hop; see safe_fetch.
+            self.response = safe_get(self.url, self.timeout, _REQUEST_HEADERS)
             self.soup = BeautifulSoup(self.response.text, "html.parser")
-        except Exception as e:
+        except BlockedURLError as e:
+            # Worth surfacing verbatim: the user chose this target, and being told
+            # it points somewhere internal is the useful answer.
+            self.blocked_reason = str(e)
             self.fetch_error = str(e)
+            logging.info(f"URL feature extraction: blocked {self.url}: {e}")
+        except Exception as e:
+            # Deliberately generic. The exception text separates "refused" from
+            # "timed out", which maps out internal hosts for whoever submitted it.
+            self.fetch_error = GENERIC_FETCH_ERROR
             logging.info(f"URL feature extraction: could not fetch {self.url}: {e}")
 
         self.whois_record = None
@@ -360,6 +370,7 @@ def extract_url_features(url: str, timeout: float = _REQUEST_TIMEOUT_SECONDS):
     meta = {
         "resolved_url": extractor.url,
         "fetch_error": extractor.fetch_error,
+        "blocked_reason": extractor.blocked_reason,
         "whois_available": extractor.whois_record is not None,
     }
     return features, meta
