@@ -22,6 +22,7 @@ from networksecurity.utils.main_utils.utils import load_object
 from networksecurity.utils.ml_utils.model.estimator import NetworkModel, validate_tree_model_integrity
 from networksecurity.utils.url_feature_extraction import extract_url_features
 from networksecurity.utils.url_red_flags import url_red_flags
+from networksecurity.utils.rate_limit import RateLimiter, client_key
 from networksecurity.constant.training_pipeline import TARGET_COLUMN, LEGACY_FEATURE_COLUMNS_TO_DROP
 
 # Below this model confidence a verdict is reported as inconclusive rather than
@@ -30,6 +31,21 @@ UNCERTAIN_CONFIDENCE_THRESHOLD = 70.0
 
 # Upper bound on an uploaded CSV, enforced before pandas sees it.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+# Both prediction routes are expensive and anonymous: /predict-url performs a DNS
+# lookup, an outbound fetch and a WHOIS query per call, and /predict runs a model
+# over an uploaded file. Shared limiter, so the budget covers the pair.
+rate_limiter = RateLimiter()
+
+
+def _enforce_rate_limit(request):
+    allowed, retry_after = rate_limiter.check(client_key(request))
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Try again shortly.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -96,6 +112,7 @@ def train_route(x_api_key: str = Header(default=None, alias="X-API-Key")):
 @app.post("/predict")
 def predict_route(request: Request,file: UploadFile = File(...)):
     try:
+        _enforce_rate_limit(request)
         # Read with a cap rather than handing an unbounded upload to pandas, which
         # would otherwise let one request exhaust the container's memory.
         raw = file.file.read(MAX_UPLOAD_BYTES + 1)
@@ -104,7 +121,12 @@ def predict_route(request: Request,file: UploadFile = File(...)):
                 status_code=413,
                 detail=f"CSV exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit.",
             )
-        df=pd.read_csv(io.BytesIO(raw))
+        try:
+            df=pd.read_csv(io.BytesIO(raw))
+        except Exception as e:
+            # A malformed upload is the caller's error, not a server fault, and
+            # returning 500 here made a bad file look like an outage.
+            raise HTTPException(status_code=400, detail=f"Could not parse CSV: {e}")
         preprocessor_path = "final_model/preprocessor.pkl"
         model_path = "final_model/model.pkl"
         if not os.path.exists(preprocessor_path) or not os.path.exists(model_path):
@@ -135,6 +157,8 @@ def predict_url_route(request: Request, url: str = Form(...)):
         model_path = "final_model/model.pkl"
         if not os.path.exists(preprocessor_path) or not os.path.exists(model_path):
             raise HTTPException(status_code=400, detail="Model artifacts not found. Run /train first.")
+
+        _enforce_rate_limit(request)
 
         features, meta = extract_url_features(url)
 

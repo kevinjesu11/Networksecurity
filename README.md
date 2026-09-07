@@ -142,6 +142,31 @@ TRAIN_API_KEY
 `TRAIN_API_KEY` gates the `/train` route on the deployed container. Leave it
 unset to keep retraining over HTTP switched off entirely.
 
+The ECR build and EC2 deployment jobs only run when the repository variable
+`ENABLE_AWS_DEPLOY` is set to `true`:
+
+```bash
+gh variable set ENABLE_AWS_DEPLOY --body true
+```
+
+Without it those jobs are skipped and the pipeline runs tests and training only,
+so a repository deploying by hand does not report a failed build on every push.
+
+## Rate Limiting
+
+Both prediction endpoints share a per-client limit, 20 requests per 60 seconds
+by default. `/predict-url` performs a DNS lookup, an outbound HTTP fetch and a
+WHOIS query per call against a caller-chosen target, which is worth bounding on
+a public port. Tune with:
+
+```bash
+RATE_LIMIT_REQUESTS=20
+RATE_LIMIT_WINDOW_SECONDS=60
+```
+
+The counter is held in memory, so it is per-container and resets on restart.
+Running more than one replica means moving it to shared storage.
+
 The Docker container listens on port `8080` in deployment.
 
 ## EC2 Runner Docker Setup
