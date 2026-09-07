@@ -7,6 +7,12 @@ on:
       - main
     paths-ignore:
       - 'README.md'
+  # Run the integration job on pull requests too, so changes are tested before
+  # they reach main rather than after. The delivery and deployment jobs below
+  # are gated to push events -- a pull request must not deploy.
+  pull_request:
+    branches:
+      - main
 
 permissions:
   id-token: write
@@ -59,6 +65,7 @@ jobs:
   build-and-push-ecr-image:
     name: Continuous Delivery
     needs: integration
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -100,6 +107,7 @@ jobs:
 
   Continuous-Deployment:
     needs: build-and-push-ecr-image
+    if: github.event_name != 'pull_request'
     runs-on: self-hosted
     steps:
       - name: Checkout
