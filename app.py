@@ -76,8 +76,13 @@ def _require_train_token(x_api_key: str | None) -> None:
 
 # POST, not GET: this retrains and overwrites final_model/, and a GET that mutates
 # state can be triggered by a crawler or a browser prefetch.
+# Defined with `def`, not `async def`: the body does blocking work (network I/O,
+# pandas, a full training run). On the event loop that stalls every other
+# request -- one slow scan pushed /health from 0.01s to 4.6s, past the
+# container healthcheck's 5s timeout. FastAPI runs sync handlers in a
+# threadpool, which is where this belongs.
 @app.post("/train")
-async def train_route(x_api_key: str = Header(default=None, alias="X-API-Key")):
+def train_route(x_api_key: str = Header(default=None, alias="X-API-Key")):
     try:
         _require_train_token(x_api_key)
         train_pipeline=TrainingPipeline()
@@ -89,11 +94,11 @@ async def train_route(x_api_key: str = Header(default=None, alias="X-API-Key")):
         raise NetworkSecurityException(e,sys)
     
 @app.post("/predict")
-async def predict_route(request: Request,file: UploadFile = File(...)):
+def predict_route(request: Request,file: UploadFile = File(...)):
     try:
         # Read with a cap rather than handing an unbounded upload to pandas, which
         # would otherwise let one request exhaust the container's memory.
-        raw = await file.read(MAX_UPLOAD_BYTES + 1)
+        raw = file.file.read(MAX_UPLOAD_BYTES + 1)
         if len(raw) > MAX_UPLOAD_BYTES:
             raise HTTPException(
                 status_code=413,
@@ -124,7 +129,7 @@ async def predict_route(request: Request,file: UploadFile = File(...)):
 
 
 @app.post("/predict-url")
-async def predict_url_route(request: Request, url: str = Form(...)):
+def predict_url_route(request: Request, url: str = Form(...)):
     try:
         preprocessor_path = "final_model/preprocessor.pkl"
         model_path = "final_model/model.pkl"

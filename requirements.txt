@@ -1,6 +1,6 @@
 python-dotenv
-pandas
-numpy
+pandas==2.3.3
+numpy==2.4.6
 certifi
 pymongo[srv]
 scikit-learn==1.9.0
