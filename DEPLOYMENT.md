@@ -71,6 +71,10 @@ Your full image URI will look like:
 123456789012.dkr.ecr.us-east-1.amazonaws.com/networksecurity:latest
 ```
 
+The container image and CI both run Python 3.12. Keep them on the same version:
+CI trains the model and the container loads it, and a mismatch between the two
+silently corrupts predictions rather than raising.
+
 ### 2. Create EC2 Instance
 
 Use:
@@ -80,6 +84,11 @@ Use:
 - Security group inbound rules:
   - SSH: port `22`, your IP
   - App: port `8080`, `0.0.0.0/0` for demo only
+
+Prefer restricting `8080` to your own IP rather than `0.0.0.0/0`. There is no
+rate limiting yet, and each `/predict-url` call costs a DNS lookup, an HTTP
+fetch and a WHOIS query, so an open port lets anyone drive outbound traffic from
+your instance.
 
 Install Docker on EC2:
 
@@ -92,6 +101,23 @@ sudo usermod -aG docker ubuntu
 newgrp docker
 docker --version
 ```
+
+### 2b. Require IMDSv2 on the Instance
+
+Do this before exposing the app. `/predict-url` fetches URLs supplied by
+anonymous visitors, which is what makes the instance metadata endpoint worth
+protecting: under IMDSv1 a single crafted request can read the instance role's
+credentials.
+
+```bash
+aws ec2 modify-instance-metadata-options   --instance-id i-YOUR_INSTANCE_ID   --http-tokens required   --http-endpoint enabled
+```
+
+The application already refuses to fetch private, loopback and link-local
+addresses, and re-checks every redirect hop. IMDSv2 is the second layer: the
+application guard resolves a hostname for its check and the socket layer
+resolves it again, and a hostile DNS server can answer differently between the
+two. Run both.
 
 ### 3. Add EC2 as GitHub Self-Hosted Runner
 
@@ -132,6 +158,21 @@ AWS_SECRET_ACCESS_KEY
 AWS_REGION
 AWS_ECR_LOGIN_URI
 ECR_REPOSITORY_NAME
+TRAIN_API_KEY
+```
+
+Generate `TRAIN_API_KEY` with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+`/train` retrains the model and overwrites `final_model/`, so it requires this
+key and rejects anything else. It fails closed: if the secret is unset the route
+returns 503 rather than running unauthenticated. Call it with:
+
+```bash
+curl -X POST -H "X-API-Key: YOUR_KEY" http://EC2_PUBLIC_IP:8080/train
 ```
 
 Example values:
