@@ -153,12 +153,14 @@ def predict_route(request: Request,file: UploadFile = File(...)):
 @app.post("/predict-url")
 def predict_url_route(request: Request, url: str = Form(...)):
     try:
+        # First, before any other work: a throttled caller should cost as close
+        # to nothing as possible, which is the whole point of the limit.
+        _enforce_rate_limit(request)
+
         preprocessor_path = "final_model/preprocessor.pkl"
         model_path = "final_model/model.pkl"
         if not os.path.exists(preprocessor_path) or not os.path.exists(model_path):
             raise HTTPException(status_code=400, detail="Model artifacts not found. Run /train first.")
-
-        _enforce_rate_limit(request)
 
         features, meta = extract_url_features(url)
 
