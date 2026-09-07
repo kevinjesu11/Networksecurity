@@ -7,6 +7,7 @@ confident green "Legitimate".
 """
 
 import io
+import os
 from unittest import mock
 
 import pytest
@@ -15,6 +16,22 @@ from fastapi.testclient import TestClient
 import app as app_module
 
 client = TestClient(app_module.app, raise_server_exceptions=False)
+
+ARTIFACTS_PRESENT = os.path.exists("final_model/model.pkl") and os.path.exists(
+    "final_model/preprocessor.pkl"
+)
+
+
+@pytest.fixture
+def pretend_artifacts_exist():
+    """Satisfies the route's artifact check without needing real .pkl files.
+
+    The prediction routes refuse early if final_model/*.pkl is missing, and
+    those files are gitignored -- CI trains after running the suite, so they do
+    not exist yet. Tests that mock the model still have to get past that check.
+    """
+    with mock.patch.object(app_module.os.path, "exists", return_value=True):
+        yield
 
 
 # -- /train access control ------------------------------------------------
@@ -61,6 +78,7 @@ def test_predict_rejects_oversized_upload():
     assert response.status_code == 413
 
 
+@pytest.mark.skipif(not ARTIFACTS_PRESENT, reason="needs a trained model; CI re-runs the suite after training")
 def test_predict_accepts_valid_csv():
     with open("valid_data/test.csv", "rb") as fh:
         response = client.post("/predict", files={"file": ("test.csv", fh.read(), "text/csv")})
@@ -82,7 +100,7 @@ def _stub_extraction(monkeypatch, blocked=None):
     monkeypatch.setattr(app_module, "extract_url_features", lambda url: (features, meta))
 
 
-def test_predict_url_rejects_blocked_target(monkeypatch):
+def test_predict_url_rejects_blocked_target(monkeypatch, pretend_artifacts_exist):
     """A refused URL was never fetched, so it must not receive a verdict."""
     _stub_extraction(monkeypatch, blocked="'169.254.169.254' resolves to a non-public address")
     response = client.post("/predict-url", data={"url": "http://169.254.169.254/"})
@@ -90,7 +108,7 @@ def test_predict_url_rejects_blocked_target(monkeypatch):
     assert "non-public" in response.json()["detail"]
 
 
-def test_low_confidence_renders_inconclusive(monkeypatch):
+def test_low_confidence_renders_inconclusive(monkeypatch, pretend_artifacts_exist):
     """Below the threshold the page must not show a green tick."""
     _stub_extraction(monkeypatch)
     monkeypatch.setattr(app_module, "url_red_flags", lambda url: ([], []))
@@ -109,7 +127,7 @@ def test_low_confidence_renders_inconclusive(monkeypatch):
     assert "Likely Legitimate" not in response.text
 
 
-def test_critical_flag_forces_phishing_verdict(monkeypatch):
+def test_critical_flag_forces_phishing_verdict(monkeypatch, pretend_artifacts_exist):
     """A structural red flag outranks a confident model score."""
     _stub_extraction(monkeypatch)
     monkeypatch.setattr(
