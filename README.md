@@ -169,9 +169,9 @@ Running more than one replica means moving it to shared storage.
 
 The Docker container listens on port `8080` in deployment.
 
-## EC2 Runner Docker Setup
+## EC2 Docker Setup
 
-Run these on the self-hosted EC2 runner:
+Run these on the EC2 instance:
 
 ```bash
 sudo apt-get update -y

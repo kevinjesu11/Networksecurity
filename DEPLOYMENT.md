@@ -13,7 +13,7 @@ This is an MLOps-style phishing detection project:
 5. Optional MLflow experiment tracking.
 6. Docker image build.
 7. Image push to AWS ECR.
-8. Deployment to an EC2 self-hosted GitHub Actions runner.
+8. Deployment to EC2 via AWS Systems Manager.
 9. FastAPI prediction service exposed from Docker.
 
 ## Cloud Architecture
@@ -36,7 +36,7 @@ GitHub Actions CD
   - push image to AWS ECR
         |
         v
-Self-hosted GitHub runner on EC2
+EC2 instance, driven by AWS SSM
   - pull latest ECR image
   - stop old container
   - run new container on port 8080
@@ -119,27 +119,57 @@ application guard resolves a hostname for its check and the socket layer
 resolves it again, and a hostile DNS server can answer differently between the
 two. Run both.
 
-### 3. Add EC2 as GitHub Self-Hosted Runner
+### 3. Automated Deployment Setup
 
-In GitHub:
+Deployment runs from a GitHub-hosted runner and drives the instance through AWS
+Systems Manager. There is no self-hosted runner: this repository is public, and
+a self-hosted runner attached to a public repository lets a fork's pull request
+execute code on the box. Nothing needs to listen on EC2, and no inbound port has
+to be open for deploys.
 
 ```text
-Repo -> Settings -> Actions -> Runners -> New self-hosted runner
+push to main
+      |
+      v
+GitHub-hosted runner
+  - assumes an AWS role via OIDC (no stored access keys)
+  - builds the image, pushes to ECR
+  - aws ssm send-command --instance-ids i-xxx
+      |
+      v
+EC2 instance
+  - pulls the image using its own instance role
+  - reads secrets from Parameter Store
+  - restarts the container, verifies /health
 ```
 
-Choose Linux, then run the commands GitHub shows on your EC2 machine.
-
-Start the runner:
+Run the setup script once, with credentials that can create IAM resources:
 
 ```bash
-./run.sh
+./scripts/setup_aws_deploy.sh kevinjesu11/Networksecurity i-YOUR_INSTANCE_ID us-east-1
 ```
 
-For a long-running runner, install it as a service:
+It creates the GitHub OIDC provider, a role only this repository's `main` branch
+can assume, ECR and scoped SSM permissions, the SSM permissions the instance
+needs, and a generated `TRAIN_API_KEY` in Parameter Store. It is re-runnable and
+prints the exact `gh secret set` commands to finish with.
+
+Application secrets live in Parameter Store rather than GitHub, so they are read
+on the instance and never travel through the workflow or appear in SSM command
+history:
 
 ```bash
-sudo ./svc.sh install
-sudo ./svc.sh start
+aws ssm put-parameter --name /networksecurity/TRAIN_API_KEY   --value "$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"   --type SecureString --region us-east-1
+
+# Only if training from MongoDB rather than the bundled CSV
+aws ssm put-parameter --name /networksecurity/MONGO_DB_URL   --value "mongodb+srv://..." --type SecureString --region us-east-1
+```
+
+Confirm SSM can see the instance before the first deploy. An empty result means
+it cannot, and the deploy will fail:
+
+```bash
+aws ssm describe-instance-information --region us-east-1   --query "InstanceInformationList[].InstanceId"
 ```
 
 ## GitHub Secrets
@@ -153,12 +183,25 @@ Repo -> Settings -> Secrets and variables -> Actions -> New repository secret
 Required:
 
 ```text
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
+AWS_ROLE_ARN
 AWS_REGION
 AWS_ECR_LOGIN_URI
 ECR_REPOSITORY_NAME
-TRAIN_API_KEY
+EC2_INSTANCE_ID
+```
+
+There is no `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`. The workflow assumes
+`AWS_ROLE_ARN` over OIDC and receives credentials that expire with the job, so
+there is nothing long-lived to leak or rotate.
+
+`TRAIN_API_KEY` is not a repository secret either -- it lives in Parameter Store
+and is read by the instance at deploy time.
+
+Deployment is off until the repository variable is set, which keeps a repo
+without AWS configured from reporting a failed build on every push:
+
+```bash
+gh variable set ENABLE_AWS_DEPLOY --body true
 ```
 
 Generate `TRAIN_API_KEY` with:
@@ -282,8 +325,9 @@ Short version:
 This project implements an MLOps CI/CD pipeline for a phishing detection model.
 On every push to main, GitHub Actions validates the code, trains the model,
 stores the trained model as a workflow artifact, builds a Docker image with the
-model inside it, pushes the image to AWS ECR, and deploys it to an EC2 instance
-running as a self-hosted GitHub Actions runner. The deployed FastAPI service
+model inside it, pushes the image to AWS ECR, and deploys it to an EC2 instance through AWS
+Systems Manager, authenticating to AWS with short-lived OIDC credentials rather
+than stored keys. The deployed FastAPI service
 serves predictions through a /predict endpoint and exposes /health for deployment
 verification.
 ```
